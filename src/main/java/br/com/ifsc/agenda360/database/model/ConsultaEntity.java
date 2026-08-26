@@ -4,6 +4,7 @@ import br.com.ifsc.agenda360.database.model.enums.*;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -43,6 +44,13 @@ public class ConsultaEntity {
     @Column(name = "data_hora_consulta", nullable = false)
     private LocalDateTime dataHora;
 
+    @Column(name = "valor_consulta", precision = 10, scale = 2)
+    private BigDecimal valor;
+
     @Column(name = "motivo_contato", length = 300)
     private String motivoContato;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status_consulta", length = 40, nullable = false)
+    private StatusConsulta status;
 }

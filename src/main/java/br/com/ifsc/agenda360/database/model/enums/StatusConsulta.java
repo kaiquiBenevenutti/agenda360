@@ -1,0 +1,13 @@
+package br.com.ifsc.agenda360.database.model.enums;
+
+public enum StatusConsulta {
+    CONSULTA_MARCADA,
+    CONSULTA_CANCELADA,
+    CONSULTA_FINALIZADA,
+    TERAPIA_MARCADA,
+    TERAPIA_CANCELADA,
+    TERAPIA_FINALIZADA,
+    RETORNO_MARCADO,
+    RETORNO_CANCELADO,
+    RETORNO_FINALIZADO
+}
