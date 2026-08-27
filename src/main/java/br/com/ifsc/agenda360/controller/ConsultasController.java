@@ -1,5 +1,6 @@
 package br.com.ifsc.agenda360.controller;
 
+import br.com.ifsc.agenda360.database.model.enums.StatusConsulta;
 import br.com.ifsc.agenda360.database.repository.IConsultaRepository;
 import br.com.ifsc.agenda360.dto.ConsultaDto;
 import br.com.ifsc.agenda360.service.ConsultasService;
@@ -11,6 +12,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("v1/consultas")
@@ -27,7 +29,34 @@ public class ConsultasController {
 
     @GetMapping
     @ResponseStatus(HttpStatus.OK)
-    public List<ConsultaDto> listarConsultas() {
+    public List<ConsultaDto> listarConsultas(@RequestParam(required = false) StatusConsulta status) {
+        if (status != null) {
+            return consultasService.buscarConsultasPorStatus(status);
+        }
         return consultasService.listarConsultas();
+    }
+
+    @GetMapping("/{id}")
+    @ResponseStatus(HttpStatus.OK)
+    public ConsultaDto buscarConsultaPorId(@PathVariable UUID id){
+        return consultasService.buscarConsultaPorId(id);
+    }
+
+    @PutMapping("/{id}")
+    @ResponseStatus(HttpStatus.OK)
+    public void editarConsulta(@PathVariable UUID id, @RequestBody @Valid ConsultaDto dto){
+        consultasService.editarConsulta(id, dto);
+    }
+
+    @PatchMapping("/cancelar/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void cancelarConsulta(@PathVariable UUID id){
+        consultasService.cancelarConsulta(id);
+    }
+
+    @PatchMapping("/finalizar/{id}")
+    @ResponseStatus(HttpStatus.OK)
+    public void finalizarConsulta(@PathVariable UUID id){
+        consultasService.finalizarConsulta(id);
     }
 }
