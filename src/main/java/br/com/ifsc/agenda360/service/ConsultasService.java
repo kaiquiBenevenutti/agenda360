@@ -2,6 +2,7 @@ package br.com.ifsc.agenda360.service;
 
 import br.com.ifsc.agenda360.database.model.ConsultaEntity;
 import br.com.ifsc.agenda360.database.model.enums.StatusConsulta;
+import br.com.ifsc.agenda360.database.model.enums.TipoConsulta;
 import br.com.ifsc.agenda360.database.repository.IConsultaRepository;
 import br.com.ifsc.agenda360.dto.ConsultaDto;
 import lombok.RequiredArgsConstructor;
@@ -103,11 +104,27 @@ public class ConsultasService {
     }
 
     public void cancelarConsulta(UUID id){
-        consultasRepository.atualizarStatus(id, StatusConsulta.CONSULTA_CANCELADA);
+        ConsultaEntity e = consultasRepository.findById(id).orElse(null);
+
+        if(e.getTipo() == TipoConsulta.CONSULTA){
+            consultasRepository.atualizarStatus(id, StatusConsulta.CONSULTA_CANCELADA);
+        } else if(e.getTipo() == TipoConsulta.TERAPIA){
+            consultasRepository.atualizarStatus(id, StatusConsulta.TERAPIA_CANCELADA);
+        } else if(e.getTipo() == TipoConsulta.RETORNO){
+            consultasRepository.atualizarStatus(id, StatusConsulta.RETORNO_CANCELADO);
+        }
     }
 
     public void finalizarConsulta(UUID id){
-        consultasRepository.atualizarStatus(id, StatusConsulta.CONSULTA_FINALIZADA);
+        ConsultaEntity e = consultasRepository.findById(id).orElse(null);
+
+        if(e.getTipo() == TipoConsulta.CONSULTA){
+            consultasRepository.atualizarStatus(id, StatusConsulta.CONSULTA_FINALIZADA);
+        } else if(e.getTipo() == TipoConsulta.TERAPIA){
+            consultasRepository.atualizarStatus(id, StatusConsulta.TERAPIA_FINALIZADA);
+        } else if(e.getTipo() == TipoConsulta.RETORNO){
+            consultasRepository.atualizarStatus(id, StatusConsulta.RETORNO_FINALIZADO);
+        }
     }
 
     //Não vai ter delete, vamos só colocar o cancelar

@@ -55,7 +55,7 @@ public class ConsultasController {
     }
 
     @PatchMapping("/finalizar/{id}")
-    @ResponseStatus(HttpStatus.OK)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
     public void finalizarConsulta(@PathVariable UUID id){
         consultasService.finalizarConsulta(id);
     }
