@@ -38,6 +38,7 @@ public class ConsultasService {
     public List<ConsultaDto> listarConsultas(){
         return consultasRepository.findAll().stream()
                 .map(e -> ConsultaDto.builder()
+                        .id(e.getId())
                         .nomePaciente(e.getNomePaciente())
                         .telefonePaciente(e.getTelefonePaciente())
                         .comoConheceu(e.getComoConheceu())
@@ -55,6 +56,7 @@ public class ConsultasService {
     public ConsultaDto buscarConsultaPorId(UUID id){
         ConsultaEntity e = consultasRepository.findById(id).orElse(null);
         return ConsultaDto.builder()
+                .id(e.getId())
                 .nomePaciente(e.getNomePaciente())
                 .telefonePaciente(e.getTelefonePaciente())
                 .comoConheceu(e.getComoConheceu())
@@ -72,6 +74,7 @@ public class ConsultasService {
 
         return consultasRepository.findByStatus(status).stream()
                 .map(e -> ConsultaDto.builder()
+                        .id(e.getId())
                         .nomePaciente(e.getNomePaciente())
                         .telefonePaciente(e.getTelefonePaciente())
                         .comoConheceu(e.getComoConheceu())
