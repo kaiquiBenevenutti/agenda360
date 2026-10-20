@@ -7,7 +7,10 @@ import br.com.ifsc.agenda360.service.ConsultasService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.convert.ConversionService;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -58,5 +61,28 @@ public class ConsultasController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void finalizarConsulta(@PathVariable UUID id){
         consultasService.finalizarConsulta(id);
+    }
+
+    @GetMapping("/{id}/atestado")
+    public ResponseEntity<byte[]> gerarAtestado(@PathVariable UUID id) {
+        byte[] pdf = consultasService.gerarAtestadoPdf(id);
+
+        // Busca os dados da consulta para pegar o nome
+        ConsultaDto consulta = consultasService.buscarConsultaPorId(id);
+
+        // Remove espaços do nome do paciente para não quebrar o nome do arquivo
+        String nomePaciente = consulta != null && consulta.getNomePaciente() != null
+                ? consulta.getNomePaciente().replaceAll("\\s+", "_")
+                : "paciente";
+
+        String nomeArquivo = "atestado_" + nomePaciente + ".pdf";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_PDF);
+
+        // Agora o arquivo baixa com o nome bonitinho (Ex: atestado_Kaiqui.pdf)
+        headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + nomeArquivo + "\"");
+
+        return new ResponseEntity<>(pdf, headers, HttpStatus.OK);
     }
 }
