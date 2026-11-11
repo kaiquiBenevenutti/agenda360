@@ -1,10 +1,12 @@
 package br.com.ifsc.agenda360.service;
 
 import br.com.ifsc.agenda360.database.model.ConsultaEntity;
+import br.com.ifsc.agenda360.database.model.enums.OrigemContato;
 import br.com.ifsc.agenda360.database.model.enums.StatusConsulta;
 import br.com.ifsc.agenda360.database.model.enums.TipoConsulta;
 import br.com.ifsc.agenda360.database.repository.IConsultaRepository;
 import br.com.ifsc.agenda360.dto.ConsultaDto;
+import br.com.ifsc.agenda360.dto.FinanceiroDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -15,18 +17,25 @@ import com.itextpdf.layout.Document;
 import com.itextpdf.layout.element.Paragraph;
 import com.itextpdf.layout.properties.TextAlignment;
 import java.io.ByteArrayOutputStream;
+import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
 
 import org.springframework.core.io.ClassPathResource;
 import com.itextpdf.io.image.ImageData;
 import com.itextpdf.io.image.ImageDataFactory;
 import com.itextpdf.layout.element.Image;
 import com.itextpdf.layout.properties.HorizontalAlignment;
-
-import java.util.List;
-import java.util.UUID;
 
 
 @Service
@@ -239,6 +248,152 @@ public class ConsultasService {
 
         document.close();
         return baos.toByteArray();
+    }
+
+    // --- FUNÇÕES DA TELA DE FINANCEIRO ---
+
+    public FinanceiroDto obterDadosFinanceiro(LocalDate dataInicio, LocalDate dataFim) {
+        LocalDate hoje = LocalDate.now();
+        LocalDate inicio = (dataInicio != null) ? dataInicio : hoje.withDayOfMonth(1);
+        LocalDate fim = (dataFim != null) ? dataFim : hoje.withDayOfMonth(hoje.lengthOfMonth());
+
+        List<ConsultaEntity> consultasNoPeriodo = inicio.isAfter(fim)
+                ? List.of()
+                : buscarEntidadesPorPeriodo(inicio, fim);
+
+        return FinanceiroDto.builder()
+                .faturamentoTotal(calcularFaturamentoTotal(consultasNoPeriodo))
+                .faturamentoSemanal(calcularFaturamentoSemanal(consultasNoPeriodo, inicio, fim))
+                .origemClientes(calcularOrigemClientes(consultasNoPeriodo))
+                .maioresCausas(calcularMaiorCausaProcura(consultasNoPeriodo))
+                .taxaConclusao(calcularTaxaConclusao(consultasNoPeriodo))
+                .build();
+    }
+
+    public List<ConsultaEntity> buscarEntidadesPorPeriodo(LocalDate inicio, LocalDate fim) {
+        LocalDateTime inicioDateTime = inicio.atStartOfDay();
+        LocalDateTime fimDateTime = fim.atTime(23, 59, 59);
+        return consultasRepository.findByDataHoraBetween(inicioDateTime, fimDateTime);
+    }
+
+    public BigDecimal calcularFaturamentoTotal(List<ConsultaEntity> consultas) {
+        return consultas.stream()
+                .filter(c -> isStatusFinalizado(c.getStatus()))
+                .map(c -> c.getValor() != null ? c.getValor() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    public List<FinanceiroDto.FaturamentoSemanalDto> calcularFaturamentoSemanal(
+            List<ConsultaEntity> consultas, LocalDate inicio, LocalDate fim) {
+
+        BigDecimal[] somas = new BigDecimal[]{
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO
+        };
+
+        long totalDias = Math.max(1L, ChronoUnit.DAYS.between(inicio, fim) + 1L);
+
+        for (ConsultaEntity c : consultas) {
+            if (!isStatusFinalizado(c.getStatus()) || c.getDataHora() == null) {
+                continue;
+            }
+            BigDecimal valor = c.getValor() != null ? c.getValor() : BigDecimal.ZERO;
+            long diasDecorridos = Math.max(0L, ChronoUnit.DAYS.between(inicio, c.getDataHora().toLocalDate()));
+            int indiceSemana = (int) Math.min(3L, (diasDecorridos * 4L) / totalDias);
+            somas[indiceSemana] = somas[indiceSemana].add(valor);
+        }
+
+        List<FinanceiroDto.FaturamentoSemanalDto> resultado = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            resultado.add(FinanceiroDto.FaturamentoSemanalDto.builder()
+                    .semana("Semana " + (i + 1))
+                    .valor(somas[i])
+                    .build());
+        }
+        return resultado;
+    }
+
+    public FinanceiroDto.OrigemClientesDto calcularOrigemClientes(List<ConsultaEntity> consultas) {
+        long instagram = 0;
+        long recomendacao = 0;
+        long facebook = 0;
+        long outros = 0;
+
+        for (ConsultaEntity c : consultas) {
+            if (c.getComoConheceu() == null) {
+                outros++;
+                continue;
+            }
+            switch (c.getComoConheceu()) {
+                case INSTAGRAM -> instagram++;
+                case RECOMENDACAO -> recomendacao++;
+                case FACEBOOK -> facebook++;
+                case OUTROS -> outros++;
+            }
+        }
+
+        return FinanceiroDto.OrigemClientesDto.builder()
+                .instagram(instagram)
+                .recomendacao(recomendacao)
+                .facebook(facebook)
+                .outros(outros)
+                .build();
+    }
+
+    public List<FinanceiroDto.CausaProcuraDto> calcularMaiorCausaProcura(List<ConsultaEntity> consultas) {
+        Map<String, Long> contagemPorChave = new LinkedHashMap<>();
+        Map<String, String> rotuloOriginal = new LinkedHashMap<>();
+
+        for (ConsultaEntity c : consultas) {
+            if (c.getMotivoContato() == null || c.getMotivoContato().trim().isEmpty()) {
+                continue;
+            }
+            String motivoLimpo = c.getMotivoContato().trim();
+            String chave = motivoLimpo.toLowerCase(Locale.ROOT);
+
+            contagemPorChave.put(chave, contagemPorChave.getOrDefault(chave, 0L) + 1L);
+            rotuloOriginal.putIfAbsent(
+                    chave,
+                    motivoLimpo.substring(0, 1).toUpperCase(Locale.ROOT) + motivoLimpo.substring(1)
+            );
+        }
+
+        return contagemPorChave.entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .limit(4)
+                .sorted(Map.Entry.comparingByValue())
+                .map(entry -> FinanceiroDto.CausaProcuraDto.builder()
+                        .causa(rotuloOriginal.get(entry.getKey()))
+                        .quantidade(entry.getValue())
+                        .build())
+                .toList();
+    }
+
+    public FinanceiroDto.TaxaConclusaoDto calcularTaxaConclusao(List<ConsultaEntity> consultas) {
+        long procuraram = consultas.size();
+        long iniciaram = consultas.stream()
+                .filter(c -> !isStatusCancelado(c.getStatus()))
+                .count();
+        long concluiram = consultas.stream()
+                .filter(c -> isStatusFinalizado(c.getStatus()))
+                .count();
+
+        return FinanceiroDto.TaxaConclusaoDto.builder()
+                .procuraram(procuraram)
+                .iniciaram(iniciaram)
+                .concluiram(concluiram)
+                .build();
+    }
+
+    private boolean isStatusFinalizado(StatusConsulta status) {
+        return status == StatusConsulta.CONSULTA_FINALIZADA
+                || status == StatusConsulta.TERAPIA_FINALIZADA
+                || status == StatusConsulta.RETORNO_FINALIZADO;
+    }
+
+    private boolean isStatusCancelado(StatusConsulta status) {
+        return status == StatusConsulta.CONSULTA_CANCELADA
+                || status == StatusConsulta.TERAPIA_CANCELADA
+                || status == StatusConsulta.RETORNO_CANCELADO;
     }
 
     //Não vai ter delete, vamos só colocar o cancelar
